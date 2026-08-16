@@ -1,0 +1,68 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper function: Check if request is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Helper function: Check if authenticated user has ADMIN privileges
+    // Checks Firebase Auth Custom Token Claims, User Role Document in Firestore, or Super Admin Email List
+    function isAdmin() {
+      return isAuthenticated() && (
+        request.auth.token.role == 'ADMIN' ||
+        request.auth.token.admin == true ||
+        (
+          exists(/databases/$(database)/documents/user_roles/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/user_roles/$(request.auth.uid)).data.role == 'ADMIN'
+        ) ||
+        request.auth.token.email in ['joshiakash1209@gmail.com', 'joshiakash1712@gmail.com']
+      );
+    }
+
+    // Helper function: Check if user owns the document
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // --- COLLECTION SECURITY RULES ---
+
+    // 1. User Roles Collection: Authenticated users can read, ONLY ADMINS CAN WRITE
+    match /user_roles/{userId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    // 2. Student Profiles: Authenticated users can read, ONLY ADMINS CAN WRITE
+    match /student_profiles/{studentId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    // 3. Attendance Records: Authenticated users can read, ONLY ADMINS CAN WRITE
+    match /attendance/{attendanceId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    // 4. Fee Ledgers & Financials: Authenticated users can read, ONLY ADMINS CAN WRITE
+    match /fees/{feeId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    // 5. Security Audit Logs: Only Administrators can read or write
+    match /security_audit_logs/{logId} {
+      allow read, write: if isAdmin();
+    }
+
+    // Global Default Protection Rule:
+    // Allows READ access to authenticated users, strictly restricts WRITE access to ADMINS ONLY
+    match /{document=**} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+  }
+}
